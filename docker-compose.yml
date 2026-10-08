@@ -1,0 +1,73 @@
+# ARCANA KB - Neo4j (APOC, volume persisten, memori terkonfigurasi) + loader + FastAPI + Streamlit
+# Kredensial dari .env (salin .env.example). Prosedur jalan-ulang: lihat README.md.
+x-app: &app
+  build: .
+  env_file: .env
+  environment:
+    NEO4J_URI: ${NEO4J_URI_DOCKER:-${NEO4J_URI:-bolt://neo4j:7687}}
+    KB_API_URL: http://kb-api:8000
+  volumes:
+    - .:/app      
+    - ./data:/app/data
+    - ./reports:/app/reports
+    - ./schema:/app/schema
+
+services:
+  neo4j:                         # hanya untuk Neo4j lokal: docker compose --profile local-db up -d
+    profiles: ["local-db"]
+    image: neo4j:5.26-community
+    container_name: arcana-neo4j
+    restart: unless-stopped
+    ports: ["7474:7474", "7687:7687"]
+    environment:
+      NEO4J_AUTH: "${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD:?isi NEO4J_PASSWORD di .env}"
+      NEO4J_PLUGINS: '["apoc"]'                       # butuh internet saat start pertama (unduh APOC ke volume plugins)
+      NEO4J_dbms_security_procedures_unrestricted: "apoc.*"
+      NEO4J_dbms_security_procedures_allowlist: "apoc.*"
+      NEO4J_server_memory_heap_initial__size: "${NEO4J_HEAP_INITIAL:-512m}"
+      NEO4J_server_memory_heap_max__size: "${NEO4J_HEAP_MAX:-1G}"
+      NEO4J_server_memory_pagecache_size: "${NEO4J_PAGECACHE:-512m}"
+      NEO4J_server_config_strict__validation_enabled: "false"
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_plugins:/plugins
+      - neo4j_import:/var/lib/neo4j/import
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/7687' && wget -qO- http://localhost:7474 >/dev/null"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 40s
+
+  loader:                       # satu kali: skema + muat data. docker compose run --rm loader
+    <<: *app
+    profiles: ["tools"]
+    command: python -m scripts.run_ingest
+
+  kb-api:
+    <<: *app
+    container_name: arcana-kb-api
+    restart: unless-stopped
+    ports: ["8001:8000"]
+    command: uvicorn kb_api.main:app --host 0.0.0.0 --port 8000
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  streamlit-ui:
+    <<: *app
+    container_name: arcana-streamlit
+    restart: unless-stopped
+    ports: ["8501:8501"]
+    depends_on:
+      kb-api: {condition: service_healthy}
+    command: streamlit run ui/app.py --server.port 8501 --server.address 0.0.0.0
+
+volumes:
+  neo4j_data:
+  neo4j_logs:
+  neo4j_plugins:
+  neo4j_import:

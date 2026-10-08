@@ -1,0 +1,7 @@
+.env
+__pycache__/
+*.pyc
+reports/*.json
+reports/*.md
+data/documents/*
+!data/documents/.gitkeep

@@ -1,0 +1,3 @@
+// Opsional (EMBEDDINGS=true). Dijalankan oleh run_schema.py dengan substitusi ${EMBEDDING_DIM}.
+CREATE VECTOR INDEX chunk_embedding IF NOT EXISTS FOR (n:Chunk) ON (n.embedding)
+OPTIONS {indexConfig: {`vector.dimensions`: ${EMBEDDING_DIM}, `vector.similarity_function`: 'cosine'}};
