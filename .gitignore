@@ -4,5 +4,4 @@ __pycache__/
 reports/*.json
 reports/*.md
 data/documents/*
-data/*
 !data/documents/.gitkeep
